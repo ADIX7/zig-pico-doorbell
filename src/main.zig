@@ -9,6 +9,8 @@ const std = @import("std");
 const BUTTON_PIN = 15;
 const GPIO_IN = false;
 
+pub const std_options: std.Options = .{ .page_size_max = 4 * 1024, .page_size_min = 4 * 1024 };
+
 // Basically the pico_w blink sample
 export fn main() c_int {
     _ = p.stdio_init_all();
@@ -37,7 +39,18 @@ export fn main() c_int {
     // }
     // _ = p.printf("Hello world\n");
 
-    std.options.page_size_max = 4096;
+    httpRequest();
+
+    while (true) {
+        while (p.gpio_get(BUTTON_PIN)) {
+            p.cyw43_arch_gpio_put(p.CYW43_WL_GPIO_LED_PIN, true);
+            p.sleep_ms(50);
+        }
+        p.cyw43_arch_gpio_put(p.CYW43_WL_GPIO_LED_PIN, false);
+    }
+}
+
+fn httpRequest() !void {
     // Create a general purpose allocator
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
@@ -63,12 +76,4 @@ export fn main() c_int {
     try req.wait();
 
     std.debug.print("status={d}\n", .{req.response.status});
-
-    while (true) {
-        while (p.gpio_get(BUTTON_PIN)) {
-            p.cyw43_arch_gpio_put(p.CYW43_WL_GPIO_LED_PIN, true);
-            p.sleep_ms(50);
-        }
-        p.cyw43_arch_gpio_put(p.CYW43_WL_GPIO_LED_PIN, false);
-    }
 }

@@ -51,10 +51,10 @@ export fn main() c_int {
     // httpRequest();
     main2();
 
-    p.cyw43_arch_gpio_put(p.CYW43_WL_GPIO_LED_PIN, true);
-    p.sleep_ms(200);
-    p.cyw43_arch_gpio_put(p.CYW43_WL_GPIO_LED_PIN, false);
-    p.sleep_ms(200);
+    // p.cyw43_arch_gpio_put(p.CYW43_WL_GPIO_LED_PIN, true);
+    // p.sleep_ms(200);
+    // p.cyw43_arch_gpio_put(p.CYW43_WL_GPIO_LED_PIN, false);
+    // p.sleep_ms(200);
 
     while (true) {
         while (p.gpio_get(BUTTON_PIN)) {
@@ -93,13 +93,14 @@ fn httpRequest() void {
     // std.debug.print("status={d}\n", .{req.response.status});
 }
 
-
 fn tcp_recv_callback(_: ?*anyopaque, pcb: ?*c.tcp_pcb, p1: ?*c.pbuf, _: c.err_t) callconv(.C) c.err_t {
     if (p1 == null) {
         _ = c.tcp_close(pcb);
         return c.ERR_OK;
     }
-    defer { _ = c.pbuf_free(p1); }
+    defer {
+        _ = c.pbuf_free(p1);
+    }
     // std.debug.print("Received data: {s}\n", .{@ptrCast([*]const u8, p1.?.payload)});
     return c.ERR_OK;
 }
@@ -108,11 +109,6 @@ fn send_http_request(pcb: ?*c.tcp_pcb) void {
     const request = "POST /todo-channel-name HTTP/1.1\r\nHost: ntfy.sh\r\nTitle: Csengo\r\nContent-Length: 6\r\n\r\nCsengo";
     _ = c.tcp_write(pcb, request, request.len, c.TCP_WRITE_FLAG_COPY);
     _ = c.tcp_output(pcb);
-
-    p.cyw43_arch_gpio_put(p.CYW43_WL_GPIO_LED_PIN, true);
-    p.sleep_ms(1000);
-    p.cyw43_arch_gpio_put(p.CYW43_WL_GPIO_LED_PIN, false);
-    p.sleep_ms(1000);
 }
 
 fn tcp_connected_callback(_: ?*anyopaque, pcb: ?*c.tcp_pcb, err: c.err_t) callconv(.C) c.err_t {
@@ -125,17 +121,75 @@ fn tcp_connected_callback(_: ?*anyopaque, pcb: ?*c.tcp_pcb, err: c.err_t) callco
     return c.ERR_OK;
 }
 
-
-
 fn dns_callback(_: [*c]const u8, ipaddr: [*c]const c.struct_ip4_addr, _: ?*anyopaque) callconv(.C) void {
+    p.cyw43_arch_gpio_put(p.CYW43_WL_GPIO_LED_PIN, true);
+    p.sleep_ms(3000);
+    p.cyw43_arch_gpio_put(p.CYW43_WL_GPIO_LED_PIN, false);
+    p.sleep_ms(1000);
+
     if (ipaddr) |addr| {
         const pcb = c.tcp_new();
         if (pcb == null) {
             return;
         }
         _ = c.tcp_connect(pcb, addr, 80, tcp_connected_callback);
-    } }
+    }
+}
 
 pub fn main2() void {
-    _ = c.dns_gethostbyname("ntfy.sh", null, dns_callback, null);
+    p.cyw43_arch_gpio_put(p.CYW43_WL_GPIO_LED_PIN, true);
+    p.sleep_ms(300);
+    p.cyw43_arch_gpio_put(p.CYW43_WL_GPIO_LED_PIN, false);
+    p.sleep_ms(2000);
+
+    c.lwip_init();
+    // c.dns_init();
+
+    c.cyw43_arch_lwip_begin();
+    p.cyw43_arch_gpio_put(p.CYW43_WL_GPIO_LED_PIN, true);
+    p.sleep_ms(1000);
+    p.cyw43_arch_gpio_put(p.CYW43_WL_GPIO_LED_PIN, false);
+    p.sleep_ms(2000);
+
+    // Set DNS server (Google DNS: 8.8.8.8)
+    // const dns_server = c.ip_addr_t{
+    //     .u_addr = .{
+    //         .ip4 = c.ip4_addr{
+    //             .addr = c.PP_HTONL(0x08080808), // 8.8.8.8 in hexadecimal, network byte order
+    //         },
+    //     },
+    //     .type = c.IPADDR_TYPE_V4,
+    // };
+    // c.dns_setserver(0, &dns_server);
+
+    const result = c.dns_gethostbyname("ntfy.sh", null, dns_callback, null);
+        p.cyw43_arch_gpio_put(p.CYW43_WL_GPIO_LED_PIN, true);
+        p.sleep_ms(1000);
+        p.cyw43_arch_gpio_put(p.CYW43_WL_GPIO_LED_PIN, false);
+        p.sleep_ms(2000);
+    c.cyw43_arch_lwip_end();
+
+    if (result == c.ERR_OK) {
+        p.cyw43_arch_gpio_put(p.CYW43_WL_GPIO_LED_PIN, true);
+        p.sleep_ms(1000);
+        p.cyw43_arch_gpio_put(p.CYW43_WL_GPIO_LED_PIN, false);
+        p.sleep_ms(2000);
+    } else if (result == c.ERR_INPROGRESS) {
+        p.cyw43_arch_gpio_put(p.CYW43_WL_GPIO_LED_PIN, true);
+        p.sleep_ms(3000);
+        p.cyw43_arch_gpio_put(p.CYW43_WL_GPIO_LED_PIN, false);
+        p.sleep_ms(2000);
+    } else if (result == c.ERR_ARG) {
+        p.cyw43_arch_gpio_put(p.CYW43_WL_GPIO_LED_PIN, true);
+        p.sleep_ms(5000);
+        p.cyw43_arch_gpio_put(p.CYW43_WL_GPIO_LED_PIN, false);
+        p.sleep_ms(2000);
+    }
+    p.cyw43_arch_gpio_put(p.CYW43_WL_GPIO_LED_PIN, true);
+    p.sleep_ms(300);
+    p.cyw43_arch_gpio_put(p.CYW43_WL_GPIO_LED_PIN, false);
+    p.sleep_ms(300);
+    p.cyw43_arch_gpio_put(p.CYW43_WL_GPIO_LED_PIN, true);
+    p.sleep_ms(300);
+    // p.sleep_ms(300);
 }

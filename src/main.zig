@@ -2,6 +2,7 @@ pub const p = @cImport({
     @cInclude("pico.h");
     @cInclude("stdio.h");
     @cInclude("pico/stdlib.h");
+    @cInclude("pico/sleep.h");
     // PICO W specific header
     @cInclude("pico/cyw43_arch.h");
 });
@@ -21,10 +22,20 @@ pub const std_options: std.Options = .{ .page_size_max = 4 * 1024, .page_size_mi
 
 // Basically the pico_w blink sample
 export fn main() c_int {
+    p.sleep_ms(5000);
     _ = p.stdio_init_all();
+
+    p.gpio_init(BUTTON_PIN);
+    p.gpio_set_dir(BUTTON_PIN, GPIO_IN);
+
     if (p.cyw43_arch_init() != 0) {
         return -1;
     }
+
+    p.sleep_run_from_xosc();
+    p.sleep_goto_dormant_until_edge_high(BUTTON_PIN);
+    p.sleep_power_up();
+
 
     p.cyw43_arch_enable_sta_mode();
     if (p.cyw43_arch_wifi_connect_timeout_ms(@embedFile("wifi.txt"), @embedFile("password.txt"), p.CYW43_AUTH_WPA2_AES_PSK, 10000) == 1) {
@@ -36,9 +47,6 @@ export fn main() c_int {
     p.sleep_ms(200);
     p.cyw43_arch_gpio_put(p.CYW43_WL_GPIO_LED_PIN, false);
     p.sleep_ms(200);
-
-    p.gpio_init(BUTTON_PIN);
-    p.gpio_set_dir(BUTTON_PIN, GPIO_IN);
 
     // while (true) {
     //     p.cyw43_arch_gpio_put(p.CYW43_WL_GPIO_LED_PIN, true);
@@ -56,12 +64,34 @@ export fn main() c_int {
     // p.cyw43_arch_gpio_put(p.CYW43_WL_GPIO_LED_PIN, false);
     // p.sleep_ms(200);
 
+    // p.cyw43_arch_gpio_put(p.CYW43_WL_GPIO_LED_PIN, false);
     while (true) {
-        while (p.gpio_get(BUTTON_PIN)) {
-            p.cyw43_arch_gpio_put(p.CYW43_WL_GPIO_LED_PIN, true);
-            p.sleep_ms(50);
-        }
+        // // printf("Switching to XOSC\n");
+        // p.uart_default_tx_wait_blocking();
+        //
+        // // Set the crystal oscillator as the dormant clock source, UART will be reconfigured from here
+        // // This is necessary before sending the pico into dormancy
+        // p.sleep_run_from_xosc();
+        //
+        // // printf("Going dormant until GPIO %d goes edge high\n", WAKE_GPIO);
+        // p.uart_default_tx_wait_blocking();
+        //
+        // // Go to sleep until we see a high edge on GPIO 10
+        // p.sleep_goto_dormant_until_edge_high(BUTTON_PIN);
+        //
+        // p.cyw43_arch_gpio_put(p.CYW43_WL_GPIO_LED_PIN, true);
+        // // Re-enabling clock sources and generators.
+        // p.sleep_power_up();
+        // _ = p.stdio_init_all();
+        // printf("Now awake for 10s\n");
+        p.cyw43_arch_gpio_put(p.CYW43_WL_GPIO_LED_PIN, true);
+        p.sleep_ms(5000);
+
+        // while (p.gpio_get(BUTTON_PIN)) {
+        //     p.sleep_ms(50);
+        // }
         p.cyw43_arch_gpio_put(p.CYW43_WL_GPIO_LED_PIN, false);
+        p.sleep_ms(2000);
     }
 }
 
@@ -142,7 +172,7 @@ pub fn main2() void {
     p.cyw43_arch_gpio_put(p.CYW43_WL_GPIO_LED_PIN, false);
     p.sleep_ms(2000);
 
-    c.lwip_init();
+    // c.lwip_init();
     // c.dns_init();
 
     c.cyw43_arch_lwip_begin();
@@ -161,13 +191,13 @@ pub fn main2() void {
     //     .type = c.IPADDR_TYPE_V4,
     // };
     // c.dns_setserver(0, &dns_server);
+    var cached_address = c.ip_addr_t{};
 
-    const result = c.dns_gethostbyname("ntfy.sh", null, dns_callback, null);
-        p.cyw43_arch_gpio_put(p.CYW43_WL_GPIO_LED_PIN, true);
-        p.sleep_ms(1000);
-        p.cyw43_arch_gpio_put(p.CYW43_WL_GPIO_LED_PIN, false);
-        p.sleep_ms(2000);
-    c.cyw43_arch_lwip_end();
+    const result = c.dns_gethostbyname("ntfy.sh", &cached_address, dns_callback, null);
+    p.cyw43_arch_gpio_put(p.CYW43_WL_GPIO_LED_PIN, true);
+    p.sleep_ms(1000);
+    p.cyw43_arch_gpio_put(p.CYW43_WL_GPIO_LED_PIN, false);
+    p.sleep_ms(2000);
 
     if (result == c.ERR_OK) {
         p.cyw43_arch_gpio_put(p.CYW43_WL_GPIO_LED_PIN, true);
@@ -185,6 +215,8 @@ pub fn main2() void {
         p.cyw43_arch_gpio_put(p.CYW43_WL_GPIO_LED_PIN, false);
         p.sleep_ms(2000);
     }
+    c.cyw43_arch_lwip_end();
+
     p.cyw43_arch_gpio_put(p.CYW43_WL_GPIO_LED_PIN, true);
     p.sleep_ms(300);
     p.cyw43_arch_gpio_put(p.CYW43_WL_GPIO_LED_PIN, false);

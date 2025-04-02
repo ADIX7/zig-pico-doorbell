@@ -31,7 +31,7 @@ pub fn build(b: *std.Build) anyerror!void {
         .app_lib = lib,
         .board = board,
         // additional pico libs for application, it is none in blink application
-        .pico_libs = "pico_cyw43_arch_lwip_threadsafe_background",
+        .pico_libs = "pico_cyw43_arch_lwip_threadsafe_background;hardware_sleep;hardware_clocks;hardware_rosc;hardware_irq",
     };
 
     std.log.info("Begin build app\n", .{});

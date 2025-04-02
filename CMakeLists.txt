@@ -2,6 +2,8 @@ cmake_minimum_required(VERSION 3.13)
 
 # Initialize the Pico SDK
 include(${PICO_SDK_PATH}/external/pico_sdk_import.cmake)
+include(${PICO_EXTRAS_PATH}/external/pico_extras_import.cmake)
+
 include_directories(${CMAKE_SOURCE_DIR}/config)
 project(${PROJ_NAME})
 pico_sdk_init()

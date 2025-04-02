@@ -37,8 +37,8 @@
     // internet connectivity.
     .dependencies = .{
         .pico_sdk = .{
-            .url = "git+https://github.com/adix7/zig-pico-cmake.git#8adc8a40000174065c2525531de4f46800233a07",
-            .hash = "pico_sdk-0.2.0-0FI1kYdcAAD3yWZDXMQdsiYBbTvlUku-AHXIX8DI50k6",
+            .url = "git+https://github.com/adix7/zig-pico-cmake.git#ed861446d382fb521b09d09ffb47c38f3451b3b7",
+            .hash = "pico_sdk-0.2.0-0FI1kVViAABimtAFil4jIl3ZFOMmf_zhxapaST3Cx3WH",
         },
     },
     .paths = .{

@@ -40,14 +40,17 @@ pub const HttpRequest = struct {
     body: []const u8,
     headers: []const HttpHeader,
 };
+
+pub const HttpResponse = struct {};
+
 pub const HttpHeader = struct {
     name: []const u8,
     value: []const u8,
 };
 
-pub const HttpContext = struct { client: *const Client, request: *const HttpRequest };
+pub const HttpContext = struct { client: *const Client, request: *const HttpRequest, response: ?*const HttpResponse = null, finished: bool = false };
 
-fn tcp_recv_callback(_: ?*anyopaque, pcb: ?*cNet.tcp_pcb, p1: ?*cNet.pbuf, _: cNet.err_t) callconv(.C) cNet.err_t {
+fn tcp_recv_callback(context: ?*anyopaque, pcb: ?*cNet.tcp_pcb, p1: ?*cNet.pbuf, _: cNet.err_t) callconv(.C) cNet.err_t {
     print("asd2");
     if (p1 == null) {
         print("asd3");
@@ -58,6 +61,10 @@ fn tcp_recv_callback(_: ?*anyopaque, pcb: ?*cNet.tcp_pcb, p1: ?*cNet.pbuf, _: cN
         _ = cNet.pbuf_free(p1);
     }
     print("asd4");
+    const http_context: *HttpContext = @ptrCast(@alignCast(context));
+    const response = http_context.client.allocator.create(HttpResponse) catch unreachable;
+    http_context.response = response;
+    http_context.finished = true;
     // std.debug.print("Received data: {s}\n", .{@ptrCast([*]const u8, p1.?.payload)});
     return cNet.ERR_OK;
 }
@@ -158,11 +165,9 @@ fn dns_callback(_: [*c]const u8, ipaddr: [*c]const cNet.struct_ip4_addr, context
 
 pub const Client = struct {
     allocator: std.mem.Allocator,
-    pub fn sendRequest(client: *const Client, request: *const HttpRequest) !void {
+    pub fn sendRequest(client: *const Client, request: *const HttpRequest) !?*const HttpResponse {
         print("Client.sendRequest");
-        const asd: *const HttpContext = &.{ .client = client, .request = request };
-        const context: *HttpContext = @constCast(asd);
-        print_usize(@intFromPtr(context));
+        const context: HttpContext = .{ .client = client, .request = request };
 
         cNet.cyw43_arch_lwip_begin();
         var cached_address = cNet.ip_addr_t{};
@@ -203,14 +208,13 @@ pub const Client = struct {
         print(host_c_string);
         print_usize(host_string.len);
         print_usize(host_c_string.len);
-        print_usize(@intFromPtr(context));
         if (context.request.url.host != null) {
             print("HOST");
         } else {
             print("NOT HOST");
         }
         print(context.request.url.scheme);
-        const result = cNet.dns_gethostbyname(@ptrCast(host_c_string), &cached_address, dns_callback, @ptrCast(@alignCast(context)));
+        const result = cNet.dns_gethostbyname(@ptrCast(host_c_string), &cached_address, dns_callback, @ptrCast(@alignCast(@constCast(&context))));
 
         if (result == cNet.ERR_OK) {
             print("DNS resolution returned with OK");
@@ -222,9 +226,12 @@ pub const Client = struct {
         print("Calling cyw43_arch_lwip_end");
         cNet.cyw43_arch_lwip_end();
         print("Ending sendRequest...");
-        while (true) {
+        while (!context.finished) {
             cNet.sleep_ms(2000);
             print("loop...");
         }
+
+        print("Request finished");
+        return context.response;
     }
 };

@@ -30,6 +30,10 @@ pub fn connect_wifi(ssid: []const u8, password: []const u8) void {
     }
 }
 
+pub fn disconnect_wifi() void {
+    p.cyw43_arch_disable_sta_mode();
+}
+
 pub fn set_cyw43_led(input: bool) void {
     p.cyw43_arch_gpio_put(p.CYW43_WL_GPIO_LED_PIN, input);
 }

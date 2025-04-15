@@ -69,7 +69,7 @@ pub fn send_doorbell_notification() !void {
 
     var client = &httpClient.Client{ .allocator = allocator };
 
-    const request = &httpClient.HttpRequest{ .method = .POST, .url = try std.Uri.parse("http://ntfy.sh/todo-channel-name"), .body = "Csengo", .headers = &[_]httpClient.HttpHeader{
+    const request = &httpClient.HttpRequest{ .method = .POST, .url = try std.Uri.parse(@embedFile("ntfy_url.txt")), .body = "Csengo", .headers = &[_]httpClient.HttpHeader{
         httpClient.HttpHeader{ .name = "Title", .value = "Csengo" },
     } };
     const response = try client.sendRequest(request);

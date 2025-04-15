@@ -1,3 +1,4 @@
+const std = @import("std");
 pub const p = @cImport({
     @cInclude("pico.h");
     @cInclude("stdio.h");
@@ -20,13 +21,29 @@ pub fn init_arch() void {
     }
 }
 
-pub fn connect_wifi(ssid: []const u8, password: []const u8) void {
+const ConnectToWifiError = error{
+    WifiError,
+};
+pub fn connect_wifi(ssid: []const u8, password: []const u8) !void {
+    var buffer: [4096]u8 = undefined;
+    var fba = std.heap.FixedBufferAllocator.init(&buffer);
+    const allocator = fba.allocator();
+
+    const c_ssid = try utils.toSentinel(ssid, allocator, null);
+    defer allocator.free(c_ssid);
+
+    const c_password = try utils.toSentinel(password, allocator, null);
+    defer allocator.free(c_password);
+
     p.cyw43_arch_enable_sta_mode();
-    if (p.cyw43_arch_wifi_connect_timeout_ms(ssid.ptr, password.ptr, p.CYW43_AUTH_WPA2_AES_PSK, 10000) == 1) {
+    const connect_wifi_result = p.cyw43_arch_wifi_connect_timeout_ms(c_ssid.ptr, c_password.ptr, p.CYW43_AUTH_WPA2_AES_PSK, 10000);
+    if (connect_wifi_result != 0) {
         p.cyw43_arch_gpio_put(p.CYW43_WL_GPIO_LED_PIN, true);
-        //TODO: error
+
         print("error in connect_wifi");
-        return;
+        utils.print_i8(@intCast(connect_wifi_result));
+
+        return error.WifiError;
     }
 }
 

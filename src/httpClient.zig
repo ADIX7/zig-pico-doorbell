@@ -69,8 +69,7 @@ fn send_http_request(pcb: ?*cNet.tcp_pcb, context: *HttpContext) !void {
 
     const request_data = .{ @tagName(context.request.method), path_string, host_string, context.request.body.len, context.request.body };
 
-    // const raw_request = try std.fmt.allocPrint(context.client.allocator, "{} {} HTTP/1.1\r\nHost: {}\r\nContent-Length: {}\r\n\r\n{}", request_data);
-    const raw_request = try std.fmt.allocPrint(context.client.allocator, "{s} {s} HTTP/1.1\r\nHost: {s}\r\nTitle: Csengo\r\nContent-Length: {}\r\n\r\n{s}", request_data);
+    const raw_request = try std.fmt.allocPrint(context.client.allocator, "{s} {s} HTTP/1.1\r\nHost: {s}\r\nTitle: Csengo\r\nPriority: 5\r\nX-Tags: bell\r\nContent-Length: {}\r\n\r\n{s}", request_data);
     print("Sending request");
     print(raw_request);
 
@@ -78,6 +77,7 @@ fn send_http_request(pcb: ?*cNet.tcp_pcb, context: *HttpContext) !void {
 
     _ = cNet.tcp_write(pcb, raw_request.ptr, @intCast(raw_request.len), cNet.TCP_WRITE_FLAG_COPY);
     _ = cNet.tcp_output(pcb);
+    print("Sent");
 }
 fn tcp_connected_callback(context: ?*anyopaque, pcb: ?*cNet.tcp_pcb, err: cNet.err_t) callconv(.C) cNet.err_t {
     print("tcp_connected_callback");
@@ -119,10 +119,13 @@ fn open_tcp_connection(ipaddr: [*c]const cNet.struct_ip4_addr, context: *const H
 
 fn dns_callback(_: [*c]const u8, ipaddr: [*c]const cNet.struct_ip4_addr, context: ?*anyopaque) callconv(.C) void {
     print("DNS resolution returned!");
+    const http_context: *HttpContext = @ptrCast(@alignCast(context));
     if (ipaddr) |addr| {
         print("DNS resolution successful!");
-        const http_context: *HttpContext = @ptrCast(@alignCast(context));
         open_tcp_connection(addr, http_context, context);
+    } else {
+        print("DNS resolution failed");
+        http_context.finished = true;
     }
 }
 
@@ -148,6 +151,8 @@ pub const Client = struct {
             host_c_string[i] = host_string[i];
         }
 
+        print("Sending DNS resolution for host");
+        print(host_string);
         const result = cNet.dns_gethostbyname(@ptrCast(host_c_string), &cached_address, dns_callback, @ptrCast(@alignCast(&context)));
 
         if (result == cNet.ERR_OK) {

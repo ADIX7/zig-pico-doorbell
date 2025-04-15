@@ -10,7 +10,7 @@ const httpClient = @import("httpClient.zig");
 const platform = @import("platform.zig");
 const utils = @import("utils.zig");
 
-const BUTTON_PIN = 15;
+const BUTTON_PIN = 28;
 const GPIO_IN = false;
 
 pub const std_options: std.Options = .{ .page_size_max = 4 * 1024, .page_size_min = 4 * 1024 };
@@ -18,6 +18,27 @@ pub const std_options: std.Options = .{ .page_size_max = 4 * 1024, .page_size_mi
 fn print(text: []const u8) void {
     utils.print(text);
 }
+
+const AppSettings = struct {
+    ssid: []const u8,
+    password: []const u8,
+    ntfy_url: []const u8,
+};
+
+const appSettings: AppSettings = x: {
+    var buf: [8192]u8 = undefined;
+    var fba = std.heap.FixedBufferAllocator.init(&buf);
+    const res = std.json.parseFromSliceLeaky(
+        AppSettings,
+        fba.allocator(),
+        @embedFile("settings.json"),
+        .{},
+    );
+    break :x res catch |e| {
+        std.debug.print("Error parsing setting.json: {e}", .{e});
+        unreachable;
+    };
+};
 
 // Basically the pico_w blink sample
 export fn main() c_int {
@@ -42,7 +63,7 @@ export fn main() c_int {
         platform.set_cyw43_led(true);
 
         print("Connecting to wifi...");
-        platform.connect_wifi(@embedFile("wifi.txt"), @embedFile("password.txt"));
+        platform.connect_wifi(appSettings.ssid, appSettings.password) catch unreachable;
         print("Connected!");
 
         send_doorbell_notification() catch unreachable;
@@ -69,7 +90,7 @@ pub fn send_doorbell_notification() !void {
 
     var client = &httpClient.Client{ .allocator = allocator };
 
-    const request = &httpClient.HttpRequest{ .method = .POST, .url = try std.Uri.parse(@embedFile("ntfy_url.txt")), .body = "Csengo", .headers = &[_]httpClient.HttpHeader{
+    const request = &httpClient.HttpRequest{ .method = .POST, .url = try std.Uri.parse(appSettings.ntfy_url), .body = "Csengo", .headers = &[_]httpClient.HttpHeader{
         httpClient.HttpHeader{ .name = "Title", .value = "Csengo" },
     } };
     const response = try client.sendRequest(request);

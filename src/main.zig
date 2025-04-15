@@ -1,21 +1,22 @@
-pub const p = @cImport({
+const std = @import("std");
+const p = @cImport({
     @cInclude("pico.h");
     @cInclude("stdio.h");
     @cInclude("pico/stdlib.h");
+    @cInclude("hardware/watchdog.h");
 });
 
 const httpClient = @import("httpClient.zig");
 const platform = @import("platform.zig");
+const utils = @import("utils.zig");
 
-const std = @import("std");
 const BUTTON_PIN = 15;
 const GPIO_IN = false;
 
 pub const std_options: std.Options = .{ .page_size_max = 4 * 1024, .page_size_min = 4 * 1024 };
 
 fn print(text: []const u8) void {
-    _ = p.printf(text.ptr);
-    _ = p.printf("\r\n");
+    utils.print(text);
 }
 
 // Basically the pico_w blink sample
@@ -34,6 +35,7 @@ export fn main() c_int {
         platform.sleep_until_gpio_high(BUTTON_PIN);
 
         // Resuming from here after wake up
+        // _ = p.stdio_init_all();
         // platform.init_arch();
         p.gpio_init(BUTTON_PIN);
         p.gpio_set_dir(BUTTON_PIN, GPIO_IN);
@@ -56,6 +58,7 @@ export fn main() c_int {
 
         platform.set_cyw43_led(false);
         p.sleep_ms(1000);
+        p.watchdog_reboot(0, 0, 0);
     }
 }
 

@@ -6,20 +6,9 @@ const cNet = @cImport({
     @cInclude("lwip/dns.h");
 });
 
+const utils = @import("utils.zig");
 fn print(text: []const u8) void {
-    var buffer: [4096]u8 = undefined;
-    var fba = std.heap.FixedBufferAllocator.init(&buffer);
-    const allocator = fba.allocator();
-    const c_text = allocator.alloc(u8, text.len + 1) catch unreachable;
-    allocator.free(c_text);
-
-    for (0..text.len) |i| {
-        c_text[i] = text[i];
-    }
-    c_text[c_text.len - 1] = 0;
-
-    _ = cNet.printf(c_text.ptr);
-    _ = cNet.printf("\r\n");
+    utils.print(text);
 }
 
 fn print_usize(num: usize) void {
@@ -51,16 +40,13 @@ pub const HttpHeader = struct {
 pub const HttpContext = struct { client: *const Client, request: *const HttpRequest, response: ?*const HttpResponse = null, finished: bool = false };
 
 fn tcp_recv_callback(context: ?*anyopaque, pcb: ?*cNet.tcp_pcb, p1: ?*cNet.pbuf, _: cNet.err_t) callconv(.C) cNet.err_t {
-    print("asd2");
     if (p1 == null) {
-        print("asd3");
         _ = cNet.tcp_close(pcb);
         return cNet.ERR_OK;
     }
     defer {
         _ = cNet.pbuf_free(p1);
     }
-    print("asd4");
     const http_context: *HttpContext = @ptrCast(@alignCast(context));
     const response = http_context.client.allocator.create(HttpResponse) catch unreachable;
     http_context.response = response;
@@ -71,28 +57,15 @@ fn tcp_recv_callback(context: ?*anyopaque, pcb: ?*cNet.tcp_pcb, p1: ?*cNet.pbuf,
 
 fn send_http_request(pcb: ?*cNet.tcp_pcb, context: *HttpContext) !void {
     print("Preparing request");
-    print_usize(@intFromPtr(context));
-    // const request = "POST /todo-channel-name HTTP/1.1\r\nHost: ntfy.sh\r\nTitle: Csengo\r\nContent-Length: 6\r\n\r\nCsengo";
-    print("Getting request");
-    if (context.request.url.host != null) {
-        print("HOST");
-    } else {
-        print("NOT HOST");
-    }
     const host = if (context.request.url.host) |host| host else unreachable;
     const host_string = switch (host) {
         .raw => |v| v,
         .percent_encoded => |v| v,
     };
-    print("Got host");
-    print(host_string);
-    print("Getting path");
     const path_string = switch (context.request.url.path) {
         .raw => |v| v,
         .percent_encoded => |v| v,
     };
-    print("Got path");
-    print(path_string);
 
     const request_data = .{ @tagName(context.request.method), path_string, host_string, context.request.body.len, context.request.body };
 
@@ -108,43 +81,40 @@ fn send_http_request(pcb: ?*cNet.tcp_pcb, context: *HttpContext) !void {
 }
 fn tcp_connected_callback(context: ?*anyopaque, pcb: ?*cNet.tcp_pcb, err: cNet.err_t) callconv(.C) cNet.err_t {
     print("tcp_connected_callback");
-    print_usize(@intFromPtr(context.?));
-    print(if (err != cNet.ERR_OK) "not ok" else "ok");
     if (err != cNet.ERR_OK) {
+        print("ERR");
         return err;
     }
     // std.debug.print("Connected to server\n", .{});
     print("Connected to server");
     _ = cNet.tcp_recv(pcb, tcp_recv_callback);
     // TODO: handle this error
-    print("asd1");
     const http_context: *HttpContext = @ptrCast(@alignCast(context));
-    print_usize(@intFromPtr(http_context));
     send_http_request(pcb, http_context) catch unreachable;
-    print("asd2");
     return cNet.ERR_OK;
 }
 
-fn open_tcp_connection(ipaddr: [*c]const cNet.struct_ip4_addr, context: *HttpContext, context2: ?*anyopaque) void {
+fn tcp_connection_error(_: ?*anyopaque, err: cNet.err_t) callconv(.c) void {
+    print("TCP connection error");
+    utils.print_i8(err);
+}
+
+fn open_tcp_connection(ipaddr: [*c]const cNet.struct_ip4_addr, context: *const HttpContext, context2: ?*anyopaque) void {
     print("open_tcp_connection");
-    if (context.request.url.host != null) {
-        print("HOST");
-    } else {
-        print("NOT HOST");
-    }
-    print_usize(@intFromPtr(context));
-    print_usize(@intFromPtr(context2.?));
     const pcb = cNet.tcp_new();
     if (pcb == null) {
+        print("pcb is null");
         return;
     }
-    if (context.request.url.host != null) {
-        print("HOST");
-    } else {
-        print("NOT HOST");
-    }
     cNet.tcp_arg(pcb, context2);
-    _ = cNet.tcp_connect(pcb, ipaddr, context.request.url.port orelse 80, tcp_connected_callback);
+    cNet.tcp_err(pcb, tcp_connection_error);
+    print("Opening tcp connection");
+    const tcp_result = cNet.tcp_connect(pcb, ipaddr, context.request.url.port orelse 80, tcp_connected_callback);
+    if (tcp_result == cNet.ERR_OK) {
+        print("TCP ok");
+    } else {
+        print("TCP not ok");
+    }
 }
 
 fn dns_callback(_: [*c]const u8, ipaddr: [*c]const cNet.struct_ip4_addr, context: ?*anyopaque) callconv(.C) void {
@@ -152,13 +122,6 @@ fn dns_callback(_: [*c]const u8, ipaddr: [*c]const cNet.struct_ip4_addr, context
     if (ipaddr) |addr| {
         print("DNS resolution successful!");
         const http_context: *HttpContext = @ptrCast(@alignCast(context));
-        print_usize(@intFromPtr(http_context));
-        print(http_context.request.url.scheme);
-        if (http_context.request.url.host != null) {
-            print("HOST");
-        } else {
-            print("NOT HOST");
-        }
         open_tcp_connection(addr, http_context, context);
     }
 }
@@ -167,65 +130,42 @@ pub const Client = struct {
     allocator: std.mem.Allocator,
     pub fn sendRequest(client: *const Client, request: *const HttpRequest) !?*const HttpResponse {
         print("Client.sendRequest");
-        const context: HttpContext = .{ .client = client, .request = request };
+        var context: HttpContext = .{ .client = client, .request = request };
 
         cNet.cyw43_arch_lwip_begin();
         var cached_address = cNet.ip_addr_t{};
-
-        if (context.request.url.host != null) {
-            print("HOST");
-        } else {
-            print("NOT HOST");
-        }
 
         const host = if (request.url.host) |host| host else unreachable;
         const host_string = switch (host) {
             .raw => |v| v,
             .percent_encoded => |v| v,
         };
-        if (context.request.url.host != null) {
-            print("HOST");
-        } else {
-            print("NOT HOST");
-        }
 
         const host_c_string = try client.allocator.alloc(u8, host_string.len + 1);
         defer client.allocator.free(host_c_string);
-        print_usize(host_string.len);
-        print_usize(host_c_string.len);
         host_c_string[host_c_string.len - 1] = 0;
-        // @memcpy(host_c_string, host_string);
         for (0..host_string.len) |i| {
             host_c_string[i] = host_string[i];
         }
-        if (context.request.url.host != null) {
-            print("HOST");
-        } else {
-            print("NOT HOST");
-        }
 
-        print("Request host is");
-        print(host_c_string);
-        print_usize(host_string.len);
-        print_usize(host_c_string.len);
-        if (context.request.url.host != null) {
-            print("HOST");
-        } else {
-            print("NOT HOST");
-        }
-        print(context.request.url.scheme);
-        const result = cNet.dns_gethostbyname(@ptrCast(host_c_string), &cached_address, dns_callback, @ptrCast(@alignCast(@constCast(&context))));
+        const result = cNet.dns_gethostbyname(@ptrCast(host_c_string), &cached_address, dns_callback, @ptrCast(@alignCast(&context)));
 
         if (result == cNet.ERR_OK) {
             print("DNS resolution returned with OK");
+            cNet.sleep_ms(10000);
+            open_tcp_connection(&cached_address, &context, @ptrCast(@alignCast(&context)));
+            context.finished = true;
         } else if (result == cNet.ERR_INPROGRESS) {
             print("DNS resolution returned with INPROGRESS");
         } else if (result == cNet.ERR_ARG) {
             print("DNS resolution returned with ERR_ARG");
+            context.finished = true;
         }
+
         print("Calling cyw43_arch_lwip_end");
         cNet.cyw43_arch_lwip_end();
         print("Ending sendRequest...");
+
         while (!context.finished) {
             cNet.sleep_ms(2000);
             print("loop...");

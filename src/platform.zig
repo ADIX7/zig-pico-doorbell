@@ -7,9 +7,9 @@ pub const p = @cImport({
     @cInclude("pico/cyw43_arch.h");
 });
 
+const utils = @import("utils.zig");
 fn print(text: []const u8) void {
-    _ = p.printf(text.ptr);
-    _ = p.printf("\r\n");
+    utils.print(text);
 }
 
 pub fn init_arch() void {
